@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>期末考看板 - 穩定重製版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { font-family: "Microsoft JhengHei", "Heiti TC", sans-serif; overflow: hidden; background-color: #f8fafc; }
+        
+        /* 跑馬燈動畫 */
+        .marquee-container {
+            overflow: hidden;
+            white-space: nowrap;
+            position: relative;
+        }
+        .marquee-content {
+            display: inline-block;
+            animation: scroll-left 20s linear infinite;
+            padding-left: 100%; /* 從最右邊開始 */
+        }
+        /* 滑鼠移上去暫停 */
+        .marquee-content:hover {
+            animation-play-state: paused;
+        }
+        @keyframes scroll-left {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+
+        /* 輸入框樣式優化 */
+        .clean-input {
+            background: transparent;
+            border-bottom: 2px solid #cbd5e1;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        .clean-input:focus {
+            border-bottom-color: #3b82f6;
+            outline: none;
+            background: rgba(255,255,255,0.5);
+        }
+        input[type="time"] {
+            font-family: 'Consolas', monospace; /* 時間用等寬字體比較好看 */
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const App = () => {
+            // 1. 時間狀態
+            const [now, setNow] = useState(new Date());
+            
+            // 2. 跑馬燈文字
+            const [marqueeText, setMarqueeText] = useState(() => localStorage.getItem('board_marquee') || "請檢查班級、座號、姓名是否填寫正確，考試期間請保持安靜，有問題請舉手發問。");
+            const [isEditingMarquee, setIsEditingMarquee] = useState(false);
+
+            // 3. 考程表資料
+            const [schedule, setSchedule] = useState(() => JSON.parse(localStorage.getItem('board_schedule')) || [
+                { subject: '國語', start: '08:40', end: '09:20' },
+                { subject: '數學', start: '09:30', end: '10:10' },
+                { subject: '英文', start: '10:30', end: '11:10' }
+            ]);
+
+            // 4. 出缺席資料
+            const [attendance, setAttendance] = useState(() => JSON.parse(localStorage.getItem('board_attendance')) || {
+                expected: '', actual: '', absent: ''
+            });
+
+            // 時間計時器
+            useEffect(() => {
+                const timer = setInterval(() => setNow(new Date()), 1000);
+                return () => clearInterval(timer);
+            }, []);
+
+            // 自動存檔
+            useEffect(() => {
+                localStorage.setItem('board_marquee', marqueeText);
+                localStorage.setItem('board_schedule', JSON.stringify(schedule));
+                localStorage.setItem('board_attendance', JSON.stringify(attendance));
+            }, [marqueeText, schedule, attendance]);
+
+            // 處理考程修改
+            const updateSchedule = (index, field, value) => {
+                const newSchedule = [...schedule];
+                newSchedule[index][field] = value;
+                setSchedule(newSchedule);
+            };
+
+            const addSubject = () => setSchedule([...schedule, { subject: '', start: '', end: '' }]);
+            const removeSubject = (index) => setSchedule(schedule.filter((_, i) => i !== index));
+
+            return (
+                <div className="flex flex-col h-screen w-screen">
+                    
+                    {/* A區：頂部大時鐘 (固定高度 20%) */}
+                    <div className="h-[20vh] bg-white border-b-4 border-gray-200 flex items-center justify-center shadow-sm relative z-10">
+                        <div className="flex flex-col items-center">
+                            <span className="text-gray-400 font-bold tracking-[0.5em] text-sm uppercase mb-[-5px]">Current Time</span>
+                            <div className="text-[10vw] font-black leading-none text-slate-800 tabular-nums">
+                                {now.toLocaleTimeString('zh-TW', { hour12: false })}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* B區：動態跑馬燈 (固定高度 8%) */}
+                    <div className="h-[8vh] bg-yellow-400 flex items-center overflow-hidden relative border-b-4 border-yellow-500">
+                        {isEditingMarquee ? (
+                            <div className="w-full flex px-4 gap-2">
+                                <input 
+                                    className="flex-1 px-4 py-1 rounded text-lg font-bold outline-none" 
+                                    value={marqueeText} 
+                                    onChange={(e) => setMarqueeText(e.target.value)} 
+                                    autoFocus
+                                />
+                                <button onClick={() => setIsEditingMarquee(false)} className="bg-black text-white px-4 rounded font-bold">完成</button>
+                            </div>
+                        ) : (
+                            <div className="w-full h-full flex items-center marquee-container cursor-pointer" onClick={() => setIsEditingMarquee(true)} title="點擊編輯跑馬燈">
+                                <div className="marquee-content text-[4vh] font-black text-slate-900">
+                                    {marqueeText}
+                                </div>
+                            </div>
+                        )}
+                        {/* 提示標籤 */}
+                        <div className="absolute left-0 top-0 bottom-0 bg-yellow-600 text-white px-3 flex items-center font-bold z-10 shadow-md">
+                            提醒
+                        </div>
+                    </div>
+
+                    {/* C區：考程表 (自動伸縮，剩餘空間 flex-1) */}
+                    <div className="flex-1 bg-slate-100 p-6 overflow-y-auto">
+                        <div className="max-w-6xl mx-auto bg-white rounded-3xl shadow-lg p-6">
+                            <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                <h2 className="text-2xl font-black text-slate-700 border-l-8 border-blue-500 pl-3">考試時間表</h2>
+                                <button onClick={addSubject} className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full font-bold hover:bg-blue-200 transition">+ 新增科目</button>
+                            </div>
+                            
+                            <div className="space-y-3">
+                                {schedule.map((item, i) => (
+                                    <div key={i} className="flex items-center gap-4 bg-slate-50 p-3 rounded-xl hover:bg-white hover:shadow-md transition-all border border-transparent hover:border-blue-200 group">
+                                        <div className="w-8 text-center text-gray-400 font-bold">{i + 1}</div>
+                                        {/* 科目 */}
+                                        <input 
+                                            className="flex-1 text-3xl font-black clean-input text-left text-slate-800" 
+                                            value={item.subject} 
+                                            onChange={(e) => updateSchedule(i, 'subject', e.target.value)} 
+                                            placeholder="輸入科目"
+                                        />
+                                        {/* 時間 */}
+                                        <div className="flex items-center gap-2 bg-white px-4 py-1 rounded-lg border">
+                                            <input 
+                                                type="time" 
+                                                className="text-2xl font-bold outline-none bg-transparent"
+                                                value={item.start}
+                                                onChange={(e) => updateSchedule(i, 'start', e.target.value)}
+                                            />
+                                            <span className="text-gray-400 font-bold">~</span>
+                                            <input 
+                                                type="time" 
+                                                className="text-2xl font-bold outline-none bg-transparent"
+                                                value={item.end}
+                                                onChange={(e) => updateSchedule(i, 'end', e.target.value)}
+                                            />
+                                        </div>
+                                        {/* 刪除按鈕 */}
+                                        <button onClick={() => removeSubject(i)} className="text-gray-300 hover:text-red-500 px-2 font-bold opacity-0 group-hover:opacity-100 transition">✕</button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* D區：底部統計 (固定高度 20%) */}
+                    <div className="h-[20vh] bg-slate-800 flex items-stretch p-4 gap-4">
+                        {/* 應到 */}
+                        <div className="flex-1 bg-blue-600 rounded-2xl flex flex-col items-center justify-center text-white relative shadow-lg overflow-hidden group">
+                            <span className="absolute top-2 left-4 text-xs font-bold opacity-70 tracking-widest">EXPECTED / 應到</span>
+                            <input 
+                                type="number" 
+                                className="w-full bg-transparent text-center text-[8vh] font-black outline-none placeholder-blue-400"
+                                value={attendance.expected}
+                                onChange={(e) => setAttendance({...attendance, expected: e.target.value})}
+                                placeholder="0"
+                            />
+                        </div>
+
+                        {/* 實到 */}
+                        <div className="flex-1 bg-emerald-500 rounded-2xl flex flex-col items-center justify-center text-white relative shadow-lg overflow-hidden">
+                            <span className="absolute top-2 left-4 text-xs font-bold opacity-70 tracking-widest">ACTUAL / 實到</span>
+                            <input 
+                                type="number" 
+                                className="w-full bg-transparent text-center text-[8vh] font-black outline-none placeholder-emerald-300"
+                                value={attendance.actual}
+                                onChange={(e) => setAttendance({...attendance, actual: e.target.value})}
+                                placeholder="0"
+                            />
+                        </div>
+
+                        {/* 缺考 */}
+                        <div className="flex-[1.5] bg-rose-600 rounded-2xl flex flex-col relative shadow-lg overflow-hidden p-2">
+                            <span className="absolute top-2 left-4 text-xs font-bold opacity-70 tracking-widest">ABSENT / 缺考名單</span>
+                            <textarea 
+                                className="w-full h-full bg-transparent text-center text-[4vh] font-bold outline-none resize-none pt-6 leading-tight placeholder-rose-400"
+                                value={attendance.absent}
+                                onChange={(e) => setAttendance({...attendance, absent: e.target.value})}
+                                placeholder="輸入座號..."
+                            />
+                        </div>
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
