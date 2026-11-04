@@ -3,30 +3,266 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>期末考看板 - 靜態提醒版</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <title>期末考看板</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        body { font-family: "Microsoft JhengHei", "Heiti TC", sans-serif; overflow: hidden; background-color: #f8fafc; }
-        
-        /* 進度條斜紋動畫 */
-        .striped-bar {
-            background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent);
-            background-size: 1rem 1rem;
-            animation: move-stripes 1s linear infinite;
-            transition: width 1s linear, background-color 0.5s ease;
+        :root {
+            --bg: #e8edf3;
+            --card: #ffffff;
+            --ink: #0f172a;
+            --ink-2: #334155;
+            --muted: #64748b;
+            --faint: #94a3b8;
+            --line: #dbe3ec;
+            --soft: #f1f5f9;
+            --accent: #1d4ed8;
+            --accent-soft: #dbe6ff;
+            --ok: #16a34a;
+            --warn: #d97706;
+            --danger: #dc2626;
+            --notice: #facc15;
+            --notice-tag: #a16207;
+            --notice-ink: #3b1d04;
         }
-        @keyframes move-stripes { from { background-position: 1rem 0; } to { background-position: 0 0; } }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: "Noto Sans TC", "Microsoft JhengHei", "Heiti TC", sans-serif;
+            background: var(--bg);
+            color: var(--ink);
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+        button, input, textarea { font: inherit; color: inherit; }
+        .num { font-family: "Roboto Mono", Consolas, "Courier New", monospace; font-variant-numeric: tabular-nums; }
 
-        /* 輸入框樣式 */
-        .clean-input { background: transparent; border-bottom: 2px solid #cbd5e1; transition: all 0.3s; text-align: center; }
-        .clean-input:focus { border-bottom-color: #3b82f6; outline: none; background: rgba(255,255,255,0.5); }
-        input[type="time"] { font-family: 'Consolas', monospace; cursor: pointer; }
+        /* ===== 整體版面 ===== */
+        .board {
+            height: 100vh;
+            display: grid;
+            grid-template-rows: 7vh minmax(0, 1fr) 23vh;
+            gap: 1.6vh;
+            padding: 1.6vh 1.6vw;
+        }
+        .card {
+            background: var(--card);
+            border-radius: 2vh;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 6px 20px rgba(15, 23, 42, .05);
+        }
 
-        /* 微調按鈕 */
-        .adjust-btn { @apply px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-bold border border-gray-300 transition-colors; }
+        /* ===== 頂列：提醒 + 工具 ===== */
+        .topbar { display: flex; gap: 1vw; min-height: 0; }
+        .notice {
+            flex: 1; min-width: 0;
+            display: flex; align-items: center;
+            background: var(--notice);
+            border-radius: 1.4vh; overflow: hidden;
+        }
+        .notice-tag {
+            align-self: stretch; display: flex; align-items: center;
+            background: var(--notice-tag); color: #fff;
+            padding: 0 1.4vw; font-weight: 900; font-size: 2.6vh; letter-spacing: .25em;
+        }
+        .notice-text {
+            flex: 1; min-width: 0; padding: 0 1.6vw;
+            font-weight: 900; font-size: 3.3vh; color: var(--notice-ink);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;
+            cursor: text; background: none; border: 0;
+        }
+        .notice-edit { flex: 1; display: flex; gap: .8vw; padding: 0 1vw; }
+        .notice-edit input {
+            flex: 1; min-width: 0; border: 0; border-radius: 1vh; padding: .6vh 1vw;
+            font-size: 2.8vh; font-weight: 900; text-align: center; outline: none;
+        }
+        .tool-btn {
+            width: 7vh; flex: none; border: 0; border-radius: 1.4vh;
+            background: var(--card); color: var(--muted); cursor: pointer;
+            display: grid; place-items: center;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, .06);
+            transition: color .2s, background .2s;
+        }
+        .tool-btn:hover { color: var(--accent); background: #f8fafc; }
+        .tool-btn svg { width: 3.2vh; height: 3.2vh; }
+
+        /* ===== 主區：科目大欄位 + 側欄 ===== */
+        .main { display: grid; grid-template-columns: minmax(0, 1fr) 29vw; gap: 1.6vh; min-height: 0; }
+
+        .hero {
+            --tone: var(--ok);
+            display: flex; flex-direction: column;
+            padding: 3vh 3vw 3.2vh; min-height: 0; overflow: hidden; position: relative;
+        }
+        .hero::before {
+            content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 1.2vh;
+            background: var(--faint);
+        }
+        .hero.live::before { background: var(--accent); }
+        .hero.wait::before { background: var(--warn); }
+        .hero.tone-warn { --tone: var(--warn); }
+        .hero.tone-danger { --tone: var(--danger); }
+
+        .hero-top { display: flex; justify-content: space-between; align-items: center; gap: 2vw; }
+        .hero-meta { display: flex; align-items: center; gap: 1.4vw; font-size: 2.6vh; font-weight: 700; color: var(--muted); }
+        .badge {
+            display: inline-flex; align-items: center; gap: .55em;
+            padding: .35em 1em; border-radius: 99px; font-weight: 900; font-size: 2.6vh; letter-spacing: .08em;
+        }
+        .badge .dot { width: .55em; height: .55em; border-radius: 50%; background: currentColor; }
+        .badge.live { background: var(--accent); color: #fff; }
+        .badge.live .dot { animation: blink 1.6s ease-in-out infinite; }
+        .badge.wait { background: #fef3c7; color: #92400e; }
+        .badge.idle { background: #e2e8f0; color: #475569; }
+        @keyframes blink { 50% { opacity: .25; } }
+
+        .supervisor { font-size: 2.6vh; font-weight: 700; color: var(--muted); white-space: nowrap; }
+        .supervisor b { color: var(--ink-2); font-weight: 900; margin-left: .5em; font-size: 1.15em; }
+
+        .hero-subject {
+            flex: 1; min-height: 0;
+            display: flex; align-items: center;
+            font-weight: 900; line-height: 1; letter-spacing: .04em;
+            white-space: nowrap; overflow: hidden;
+        }
+        .hero.wait .hero-subject { color: var(--ink-2); }
+        .hero.idle .hero-subject { color: var(--faint); }
+
+        .hero-bottom { display: flex; justify-content: space-between; align-items: flex-end; gap: 2vw; }
+        .label { font-size: 2.3vh; font-weight: 700; color: var(--muted); margin-bottom: .8vh; letter-spacing: .1em; }
+        .hero-time { font-size: 7.5vh; font-weight: 700; line-height: 1; white-space: nowrap; }
+        .hero-time .sep { color: var(--faint); margin: 0 .2em; font-weight: 500; }
+        .remain { text-align: right; }
+        .remain-value { font-size: 12vh; font-weight: 700; line-height: .85; color: var(--tone); white-space: nowrap; }
+        .hero.wait .remain-value { color: var(--warn); }
+        .remain-unit { font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif; font-size: 3.6vh; font-weight: 900; margin-left: .25em; }
+        .tone-danger .remain-value { animation: blink 1.2s ease-in-out infinite; }
+
+        .progress { height: 2.4vh; background: var(--soft); border-radius: 99px; overflow: hidden; margin-top: 2.6vh; box-shadow: inset 0 1px 2px rgba(15,23,42,.08); }
+        .progress > i {
+            display: block; height: 100%; border-radius: inherit; background-color: var(--tone);
+            background-image: linear-gradient(45deg, rgba(255,255,255,.18) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.18) 50%, rgba(255,255,255,.18) 75%, transparent 75%, transparent);
+            background-size: 2.4vh 2.4vh;
+            animation: stripes 1s linear infinite;
+            transition: width 1s linear, background-color .5s;
+        }
+        @keyframes stripes { from { background-position: 2.4vh 0; } to { background-position: 0 0; } }
+
+        .hero-empty-btn {
+            margin-top: 2vh; align-self: flex-start; border: 0; border-radius: 1.2vh; cursor: pointer;
+            background: var(--accent); color: #fff; font-weight: 900; font-size: 2.6vh; padding: 1.2vh 2vw;
+        }
+
+        /* ===== 側欄：時鐘 + 人數 ===== */
+        .side { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 1.6vh; min-height: 0; }
+        .clock { padding: 2.4vh 1.6vw 2.6vh; text-align: center; }
+        .clock-date { font-size: 2.5vh; font-weight: 700; color: var(--muted); letter-spacing: .08em; }
+        .clock-time { font-size: 10vh; font-weight: 700; line-height: 1.05; margin-top: .4vh; white-space: nowrap; }
+        .clock-time small { font-size: .42em; color: var(--faint); margin-left: .15em; }
+        .clock-offset { font-size: 1.8vh; color: var(--warn); font-weight: 700; margin-top: .4vh; }
+
+        .attend { padding: 2.2vh 1.4vw; display: flex; flex-direction: column; gap: 1.4vh; min-height: 0; }
+        .attend-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .8vw; }
+        .stat { border-radius: 1.4vh; padding: 1.2vh .4vw .6vh; text-align: center; background: var(--soft); }
+        .stat label { display: block; font-size: 2.1vh; font-weight: 900; color: var(--muted); letter-spacing: .15em; }
+        .stat input, .stat .val {
+            display: block; width: 100%; border: 0; background: transparent; outline: none;
+            text-align: center; font-size: 6.4vh; font-weight: 700; line-height: 1.15;
+        }
+        .stat input::placeholder { color: #cbd5e1; }
+        .stat input::-webkit-outer-spin-button, .stat input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .stat input { -moz-appearance: textfield; }
+        .stat.absent { background: #fee2e2; }
+        .stat.absent label, .stat.absent .val { color: #b91c1c; }
+        .stat.full { background: #dcfce7; }
+        .stat.full label, .stat.full .val { color: #15803d; }
+
+        .absent-list { flex: 1; min-height: 0; display: flex; flex-direction: column; border-radius: 1.4vh; background: #fff1f2; padding: 1.2vh 1vw; }
+        .absent-list label { font-size: 2.1vh; font-weight: 900; color: #be123c; letter-spacing: .15em; }
+        .absent-list textarea {
+            flex: 1; min-height: 0; width: 100%; border: 0; background: transparent; outline: none; resize: none;
+            font-size: 4vh; font-weight: 700; line-height: 1.25; color: #881337; padding-top: .6vh;
+        }
+        .absent-list textarea::placeholder { color: #fda4af; }
+
+        /* ===== 底部：考程區塊 ===== */
+        .schedule { display: grid; gap: 1.2vw; min-height: 0; }
+        .slot {
+            position: relative; overflow: hidden;
+            display: flex; flex-direction: column; justify-content: space-between;
+            padding: 1.8vh 1.2vw 2vh; border-radius: 1.8vh;
+            background: var(--card); border: .4vh solid transparent;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, .06);
+            transition: background .4s, opacity .4s;
+        }
+        .slot-head { display: flex; justify-content: space-between; align-items: center; font-size: 2vh; font-weight: 700; color: var(--muted); gap: .5vw; }
+        .chip { font-size: 1.8vh; font-weight: 900; padding: .15em .7em; border-radius: 99px; background: var(--soft); color: var(--muted); white-space: nowrap; }
+        .slot-subject { font-weight: 900; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .03em; }
+        .slot-time { font-size: 3.2vh; font-weight: 700; white-space: nowrap; }
+        .slot-time .sep { color: var(--faint); margin: 0 .15em; font-weight: 500; }
+        .slot.done { opacity: .45; }
+        .slot.done .chip { background: #e2e8f0; }
+        .slot.next { border-color: var(--warn); }
+        .slot.next .chip { background: #fef3c7; color: #92400e; }
+        .slot.live { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .slot.live .slot-head { color: #c7d7fe; }
+        .slot.live .chip { background: #fff; color: var(--accent); }
+        .slot.live .slot-time .sep { color: #93b0f8; }
+        .slot-fill { position: absolute; left: 0; bottom: 0; height: .9vh; background: rgba(255, 255, 255, .75); transition: width 1s linear; }
+        .schedule-empty { display: grid; place-items: center; font-size: 2.6vh; font-weight: 700; color: var(--faint); border: .3vh dashed var(--line); border-radius: 1.8vh; }
+
+        /* ===== 設定面板 ===== */
+        .overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, .45); display: grid; place-items: center; z-index: 50; padding: 3vh 2vw; }
+        .panel {
+            width: min(980px, 100%); max-height: 100%; overflow: auto;
+            background: #fff; border-radius: 18px; box-shadow: 0 20px 60px rgba(15, 23, 42, .3);
+            font-size: 16px;
+        }
+        .panel-head { position: sticky; top: 0; background: #fff; z-index: 1; display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; border-bottom: 1px solid var(--line); }
+        .panel-head h2 { font-size: 20px; font-weight: 900; }
+        .panel-body { padding: 8px 24px 24px; }
+        .section { padding: 18px 0; border-bottom: 1px solid var(--soft); }
+        .section:last-child { border-bottom: 0; }
+        .section-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .section-title h3 { font-size: 16px; font-weight: 900; color: var(--ink-2); border-left: 5px solid var(--accent); padding-left: 10px; }
+        .hint { font-size: 13px; color: var(--muted); margin-top: 8px; }
+
+        .rows { display: flex; flex-direction: column; gap: 8px; }
+        .row { display: grid; grid-template-columns: 28px 1.4fr 1fr auto 36px; gap: 10px; align-items: center; background: #f8fafc; border-radius: 10px; padding: 8px 10px; }
+        .row-idx { text-align: center; font-weight: 900; color: var(--faint); }
+        .field { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: #fff; outline: none; font-size: 16px; }
+        .field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+        .field.bad { border-color: var(--danger); }
+        .times { display: flex; align-items: center; gap: 6px; }
+        .times .field { width: auto; font-family: "Roboto Mono", Consolas, monospace; }
+        .btn { border: 0; border-radius: 8px; padding: 8px 14px; font-weight: 700; cursor: pointer; font-size: 14px; background: var(--soft); color: var(--ink-2); }
+        .btn:hover { background: #e2e8f0; }
+        .btn.primary { background: var(--accent); color: #fff; }
+        .btn.primary:hover { background: #1e40af; }
+        .btn.ghost-danger { background: transparent; color: var(--faint); font-size: 18px; padding: 4px 8px; }
+        .btn.ghost-danger:hover { color: var(--danger); background: #fee2e2; }
+        .btn-group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .offset-now { font-family: "Roboto Mono", Consolas, monospace; font-weight: 700; margin-left: 8px; color: var(--ink-2); }
+
+        /* ===== 小螢幕（手機／直式）改為可捲動的單欄 ===== */
+        @media (max-width: 900px), (orientation: portrait) {
+            body { overflow: auto; }
+            .board { height: auto; min-height: 100vh; grid-template-rows: auto auto auto; }
+            .topbar { height: 56px; }
+            .notice-text { font-size: 18px; }
+            .notice-tag { font-size: 15px; }
+            .tool-btn { width: 56px; }
+            .main { grid-template-columns: 1fr; }
+            .hero { min-height: 52vh; }
+            .hero-subject { min-height: 22vh; }
+            .schedule { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+            .slot { min-height: 16vh; }
+            .row { grid-template-columns: 24px 1fr 36px; }
+            .row .times, .row .sup { grid-column: 2 / 3; }
+        }
     </style>
 </head>
 <body>
@@ -35,216 +271,313 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        const App = () => {
-            const [now, setNow] = useState(new Date());
-            const [offset, setOffset] = useState(() => Number(localStorage.getItem('exam_clock_offset')) || 0);
-            const [marqueeText, setMarqueeText] = useState(() => localStorage.getItem('board_marquee') || "請檢查班級、座號、姓名是否填寫正確，考試期間請保持安靜。");
-            const [isEditingMarquee, setIsEditingMarquee] = useState(false);
-            
-            const [schedule, setSchedule] = useState(() => JSON.parse(localStorage.getItem('board_schedule_v2')) || [
-                { subject: '國語', supervisor: '王老師', start: '08:40', end: '09:20' },
-                { subject: '數學', supervisor: '李老師', start: '09:30', end: '10:10' },
-                { subject: '英文', supervisor: '陳老師', start: '10:30', end: '11:10' }
-            ]);
-            
-            const [attendance, setAttendance] = useState(() => JSON.parse(localStorage.getItem('board_attendance')) || { expected: '', actual: '', absent: '' });
+        /* ---------- 儲存（沿用舊版鍵名，既有資料不會遺失） ---------- */
+        const KEYS = {
+            offset: 'exam_clock_offset',
+            notice: 'board_marquee',
+            schedule: 'board_schedule_v2',
+            attendance: 'board_attendance',
+        };
+        const readRaw = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+        const writeRaw = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+        const readJSON = (k, fb) => { try { const v = readRaw(k); return v === null ? fb : JSON.parse(v); } catch { return fb; } };
 
-            useEffect(() => {
-                const timer = setInterval(() => setNow(new Date()), 1000);
-                return () => clearInterval(timer);
-            }, []);
+        const DEFAULT_SCHEDULE = [
+            { subject: '國語', supervisor: '王老師', start: '08:40', end: '09:20' },
+            { subject: '數學', supervisor: '李老師', start: '09:30', end: '10:10' },
+            { subject: '英文', supervisor: '陳老師', start: '10:30', end: '11:10' },
+        ];
+        const DEFAULT_NOTICE = '請檢查班級、座號、姓名是否填寫正確，考試期間請保持安靜。';
+        const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+        const PERIOD = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
 
-            useEffect(() => {
-                localStorage.setItem('exam_clock_offset', offset);
-                localStorage.setItem('board_marquee', marqueeText);
-                localStorage.setItem('board_schedule_v2', JSON.stringify(schedule));
-                localStorage.setItem('board_attendance', JSON.stringify(attendance));
-            }, [offset, marqueeText, schedule, attendance]);
+        const toMin = (s) => {
+            if (!/^\d{1,2}:\d{2}$/.test(s || '')) return null;
+            const [h, m] = s.split(':').map(Number);
+            return h * 60 + m;
+        };
+        const pad = (n) => String(n).padStart(2, '0');
+        const periodName = (i) => `第${PERIOD[i] || i + 1}節`;
+        const charLen = (s) => Math.max([...(s || '')].length, 2);
 
-            const adjustedNow = useMemo(() => new Date(now.getTime() + offset), [now, offset]);
+        /* 秒數 → 顯示（10 分鐘以上以「分」呈現，以下以 分:秒 呈現） */
+        const fmtRemain = (sec) => {
+            if (sec >= 600) return { value: Math.ceil(sec / 60), unit: '分' };
+            return { value: `${pad(Math.floor(sec / 60))}:${pad(sec % 60)}`, unit: '' };
+        };
 
-            // 計算當前狀態
-            const currentStatus = useMemo(() => {
-                const currentMs = adjustedNow.getHours() * 3600000 + adjustedNow.getMinutes() * 60000 + adjustedNow.getSeconds() * 1000;
-                
-                for (let item of schedule) {
-                    const [sh, sm] = item.start.split(':').map(Number);
-                    const [eh, em] = item.end.split(':').map(Number);
-                    const startMs = sh * 3600000 + sm * 60000;
-                    const endMs = eh * 3600000 + em * 60000;
+        const Icon = {
+            gear: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+            expand: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>,
+        };
 
-                    if (currentMs >= startMs && currentMs < endMs) {
-                        const totalDuration = endMs - startMs;
-                        const elapsed = currentMs - startMs;
-                        const percent = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
-                        const remainingMinutes = Math.ceil((endMs - currentMs) / 60000);
-                        
-                        let color = 'bg-green-500';
-                        if (remainingMinutes <= 5) color = 'bg-red-600';
-                        else if (percent > 50) color = 'bg-yellow-400';
-
-                        return { 
-                            active: true, 
-                            subject: item.subject, 
-                            supervisor: item.supervisor, 
-                            percent, color, remaining: remainingMinutes 
-                        };
-                    }
-                }
-                return { active: false, subject: '準備中', supervisor: '', percent: 0, color: 'bg-gray-300', remaining: 0 };
-            }, [adjustedNow, schedule]);
-
-            const updateSchedule = (index, field, value) => {
-                const newSchedule = [...schedule];
-                newSchedule[index][field] = value;
-                setSchedule(newSchedule);
+        /* ---------- 設定面板 ---------- */
+        const Settings = ({ schedule, setSchedule, offset, setOffset, notice, setNotice, onClose }) => {
+            const update = (i, field, value) => setSchedule(schedule.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
+            const add = () => {
+                const last = schedule[schedule.length - 1];
+                const e = toMin(last && last.end);
+                const s = e != null ? e + 10 : null;
+                const fmt = (m) => m == null ? '' : `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
+                setSchedule([...schedule, { subject: '', supervisor: '', start: fmt(s), end: fmt(s != null ? s + 40 : null) }]);
             };
-
-            const addSubject = () => setSchedule([...schedule, { subject: '', supervisor: '', start: '', end: '' }]);
-            const removeSubject = (index) => setSchedule(schedule.filter((_, i) => i !== index));
+            const offsetSec = Math.round(offset / 1000);
 
             return (
-                <div className="flex flex-col h-screen w-screen bg-slate-50">
-                    
-                    {/* A區：頂部大時鐘 + 資訊看板 */}
-                    <div className="h-[25vh] bg-white border-b-4 border-gray-200 flex flex-col shadow-sm relative z-20">
-                        <div className="flex-[1.5] flex items-center justify-center relative group bg-gray-50/50">
-                            {/* 左側微調 */}
-                            <div className="flex flex-col gap-2 mr-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => setOffset(o => o + 60000)} className="adjust-btn text-blue-600 border-blue-200 bg-white">+1 分</button>
-                                <button onClick={() => setOffset(o => o + 1000)} className="adjust-btn text-blue-600 border-blue-200 bg-white">+1 秒</button>
-                            </div>
-                            {/* 大時鐘 */}
-                            <div className="flex flex-col items-center">
-                                <span className="text-gray-400 font-bold tracking-[0.5em] text-xs uppercase mb-[-5px]">Current Time</span>
-                                <div className="text-[10vh] font-black leading-none text-slate-800 tabular-nums drop-shadow-sm">
-                                    {adjustedNow.toLocaleTimeString('zh-TW', { hour12: false })}
-                                </div>
-                            </div>
-                            {/* 右側微調 */}
-                            <div className="flex flex-col gap-2 ml-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => setOffset(o => o - 60000)} className="adjust-btn text-red-600 border-red-200 bg-white">-1 分</button>
-                                <button onClick={() => setOffset(o => o - 1000)} className="adjust-btn text-red-600 border-red-200 bg-white">-1 秒</button>
-                            </div>
-                            {/* 剩餘時間 */}
-                            {currentStatus.active && (
-                                <div className="absolute right-12 flex flex-col items-center animate-pulse">
-                                    <span className="text-gray-400 font-bold text-sm">剩餘時間</span>
-                                    <div className={`text-[6vh] font-black leading-none ${currentStatus.remaining <= 5 ? 'text-red-600' : 'text-slate-600'}`}>
-                                        {currentStatus.remaining}<span className="text-[2vh] ml-1">分</span>
-                                    </div>
-                                </div>
-                            )}
-                            <div className="absolute bottom-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                 <button onClick={() => setOffset(0)} className="px-2 py-0.5 bg-gray-200 text-gray-500 rounded text-[10px] font-bold hover:bg-gray-300">重設時鐘</button>
-                            </div>
+                <div className="overlay" onClick={onClose}>
+                    <div className="panel" onClick={(e) => e.stopPropagation()}>
+                        <div className="panel-head">
+                            <h2>看板設定</h2>
+                            <button className="btn primary" onClick={onClose}>完成</button>
                         </div>
-
-                        <div className="flex-1 bg-white px-8 pb-3 flex flex-col justify-end relative">
-                            <div className="flex justify-between items-end mb-2">
-                                <div className="flex items-center gap-4">
-                                    <span className={`font-black text-4xl drop-shadow-sm ${currentStatus.active ? 'text-blue-700' : 'text-gray-300'}`}>
-                                        {currentStatus.subject}
-                                    </span>
-                                    {currentStatus.active && <span className="text-xs font-bold text-white bg-blue-500 px-2 py-0.5 rounded shadow-sm">考試中</span>}
+                        <div className="panel-body">
+                            <div className="section">
+                                <div className="section-title">
+                                    <h3>考試時間表</h3>
+                                    <button className="btn" onClick={add}>＋ 新增科目</button>
                                 </div>
-                                <div className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200">
-                                    <span className="text-sm font-bold text-gray-400 uppercase">Supervisor</span>
-                                    <span className="text-xl font-bold text-slate-700">
-                                        {currentStatus.supervisor || "---"}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="w-full h-6 bg-gray-100 rounded-full overflow-hidden shadow-inner border border-gray-200 relative">
-                                <div className={`h-full ${currentStatus.color} striped-bar`} style={{ width: `${currentStatus.percent}%` }}></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* B區：靜態公告 (不再跑動) */}
-                    <div className="h-[6vh] bg-yellow-400 flex items-center relative border-b-4 border-yellow-500 shadow-md z-10 px-16 justify-center">
-                        <div className="absolute left-0 top-0 bottom-0 bg-yellow-600 text-white px-4 flex items-center font-bold z-10 shadow-r-md text-lg">提醒</div>
-                        
-                        {isEditingMarquee ? (
-                            <div className="w-full flex gap-2 max-w-4xl">
-                                <input className="flex-1 px-4 py-1 rounded text-lg font-bold outline-none text-center" value={marqueeText} onChange={(e) => setMarqueeText(e.target.value)} autoFocus />
-                                <button onClick={() => setIsEditingMarquee(false)} className="bg-black text-white px-4 rounded font-bold">完成</button>
-                            </div>
-                        ) : (
-                            <div 
-                                className="w-full text-center text-[3.5vh] font-black text-slate-900 leading-none truncate cursor-pointer hover:opacity-80 transition-opacity" 
-                                onClick={() => setIsEditingMarquee(true)} 
-                                title="點擊編輯文字"
-                            >
-                                {marqueeText}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* C區：考程表 */}
-                    <div className="flex-1 bg-slate-100 p-4 overflow-y-auto">
-                        <div className="max-w-6xl mx-auto bg-white rounded-2xl shadow-lg p-5 border border-slate-200">
-                            <div className="flex justify-between items-center mb-3 border-b pb-2">
-                                <h2 className="text-xl font-black text-slate-700 border-l-8 border-blue-500 pl-3">考試時間表設定</h2>
-                                <button onClick={addSubject} className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-sm font-bold hover:bg-blue-200 transition">+ 新增科目</button>
-                            </div>
-                            
-                            <div className="space-y-2">
-                                {schedule.map((item, i) => {
-                                    const isCurrent = currentStatus.subject === item.subject && currentStatus.active;
-                                    return (
-                                        <div key={i} className={`flex items-center gap-4 p-2 rounded-xl transition-all border-l-4 ${isCurrent ? 'bg-blue-50 border-blue-500 shadow-md scale-[1.01]' : 'bg-slate-50 border-transparent hover:bg-white hover:shadow-sm'}`}>
-                                            <div className={`w-8 text-center font-bold text-xl ${isCurrent ? 'text-blue-600' : 'text-gray-400'}`}>{i + 1}</div>
-                                            
-                                            <input 
-                                                className="flex-1 text-2xl font-black clean-input text-left text-slate-800 w-1/3" 
-                                                value={item.subject} 
-                                                onChange={(e) => updateSchedule(i, 'subject', e.target.value)} 
-                                                placeholder="科目"
-                                            />
-
-                                            <input 
-                                                className="flex-1 text-xl font-bold clean-input text-center text-slate-600 w-1/4" 
-                                                value={item.supervisor} 
-                                                onChange={(e) => updateSchedule(i, 'supervisor', e.target.value)} 
-                                                placeholder="監考老師"
-                                            />
-
-                                            <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-lg border">
-                                                <input type="time" className="text-xl font-bold outline-none bg-transparent" value={item.start} onChange={(e) => updateSchedule(i, 'start', e.target.value)} />
-                                                <span className="text-gray-400 font-bold">~</span>
-                                                <input type="time" className="text-xl font-bold outline-none bg-transparent" value={item.end} onChange={(e) => updateSchedule(i, 'end', e.target.value)} />
+                                <div className="rows">
+                                    {schedule.map((r, i) => {
+                                        const s = toMin(r.start), e = toMin(r.end);
+                                        const bad = s != null && e != null && e <= s;
+                                        return (
+                                            <div className="row" key={i}>
+                                                <div className="row-idx">{i + 1}</div>
+                                                <input className="field" value={r.subject} placeholder="科目" onChange={(ev) => update(i, 'subject', ev.target.value)} />
+                                                <input className="field sup" value={r.supervisor} placeholder="監考老師" onChange={(ev) => update(i, 'supervisor', ev.target.value)} />
+                                                <div className="times">
+                                                    <input type="time" className={`field ${bad ? 'bad' : ''}`} value={r.start} onChange={(ev) => update(i, 'start', ev.target.value)} />
+                                                    <span>～</span>
+                                                    <input type="time" className={`field ${bad ? 'bad' : ''}`} value={r.end} onChange={(ev) => update(i, 'end', ev.target.value)} />
+                                                </div>
+                                                <button className="btn ghost-danger" title="刪除" onClick={() => setSchedule(schedule.filter((_, idx) => idx !== i))}>✕</button>
                                             </div>
-                                            <button onClick={() => removeSubject(i)} className="text-gray-300 hover:text-red-500 px-2 font-bold">✕</button>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                </div>
+                                <p className="hint">看板會依開始時間自動排序；結束時間早於開始時間的列會以紅框標示，且不會顯示在看板上。</p>
+                            </div>
+
+                            <div className="section">
+                                <div className="section-title"><h3>提醒文字</h3></div>
+                                <input className="field" value={notice} onChange={(e) => setNotice(e.target.value)} />
+                            </div>
+
+                            <div className="section">
+                                <div className="section-title"><h3>時鐘校正</h3></div>
+                                <div className="btn-group">
+                                    <button className="btn" onClick={() => setOffset(o => o - 60000)}>－1 分</button>
+                                    <button className="btn" onClick={() => setOffset(o => o - 1000)}>－1 秒</button>
+                                    <button className="btn" onClick={() => setOffset(o => o + 1000)}>＋1 秒</button>
+                                    <button className="btn" onClick={() => setOffset(o => o + 60000)}>＋1 分</button>
+                                    <button className="btn" onClick={() => setOffset(0)}>重設</button>
+                                    <span className="offset-now">目前偏移 {offsetSec >= 0 ? '+' : ''}{offsetSec} 秒</span>
+                                </div>
+                                <p className="hint">若教室電腦時間與學校鐘聲不一致，可在此微調；偏移量會保留在此瀏覽器中。</p>
                             </div>
                         </div>
                     </div>
-
-                    {/* D區：底部統計 */}
-                    <div className="h-[20vh] bg-slate-800 flex items-stretch p-4 gap-4">
-                        <div className="flex-1 bg-blue-600 rounded-2xl flex flex-col items-center justify-center text-white relative shadow-lg overflow-hidden group border border-white/10">
-                            <span className="absolute top-2 left-4 text-sm font-bold opacity-70 tracking-widest">EXPECTED / 應到</span>
-                            <input type="number" className="w-full bg-transparent text-center text-[9vh] font-black outline-none placeholder-blue-300" value={attendance.expected} onChange={(e) => setAttendance({...attendance, expected: e.target.value})} placeholder="0" />
-                        </div>
-                        <div className="flex-1 bg-emerald-500 rounded-2xl flex flex-col items-center justify-center text-white relative shadow-lg overflow-hidden border border-white/10">
-                            <span className="absolute top-2 left-4 text-sm font-bold opacity-70 tracking-widest">ACTUAL / 實到</span>
-                            <input type="number" className="w-full bg-transparent text-center text-[9vh] font-black outline-none placeholder-emerald-200" value={attendance.actual} onChange={(e) => setAttendance({...attendance, actual: e.target.value})} placeholder="0" />
-                        </div>
-                        <div className="flex-[1.5] bg-rose-600 rounded-2xl flex flex-col relative shadow-lg overflow-hidden p-3 border border-white/10">
-                            <span className="absolute top-2 left-4 text-sm font-bold opacity-70 tracking-widest">ABSENT / 缺考名單</span>
-                            <textarea className="w-full h-full bg-transparent text-center text-[5vh] font-bold outline-none resize-none pt-6 leading-tight placeholder-rose-300" value={attendance.absent} onChange={(e) => setAttendance({...attendance, absent: e.target.value})} placeholder="輸入座號..." />
-                        </div>
-                    </div>
-
                 </div>
             );
         };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        /* ---------- 主看板 ---------- */
+        const App = () => {
+            const [now, setNow] = useState(new Date());
+            const [offset, setOffset] = useState(() => Number(readRaw(KEYS.offset)) || 0);
+            const [notice, setNotice] = useState(() => readRaw(KEYS.notice) ?? DEFAULT_NOTICE);
+            const [schedule, setSchedule] = useState(() => {
+                const s = readJSON(KEYS.schedule, null);
+                return Array.isArray(s) ? s : DEFAULT_SCHEDULE;
+            });
+            const [attendance, setAttendance] = useState(() => ({ expected: '', actual: '', absent: '', ...readJSON(KEYS.attendance, {}) }));
+            const [editingNotice, setEditingNotice] = useState(false);
+            const [showSettings, setShowSettings] = useState(false);
+
+            useEffect(() => {
+                const t = setInterval(() => setNow(new Date()), 500);
+                return () => clearInterval(t);
+            }, []);
+
+            useEffect(() => { writeRaw(KEYS.offset, String(offset)); }, [offset]);
+            useEffect(() => { writeRaw(KEYS.notice, notice); }, [notice]);
+            useEffect(() => { writeRaw(KEYS.schedule, JSON.stringify(schedule)); }, [schedule]);
+            useEffect(() => { writeRaw(KEYS.attendance, JSON.stringify(attendance)); }, [attendance]);
+
+            useEffect(() => {
+                const onKey = (e) => { if (e.key === 'Escape') { setShowSettings(false); setEditingNotice(false); } };
+                window.addEventListener('keydown', onKey);
+                return () => window.removeEventListener('keydown', onKey);
+            }, []);
+
+            const t = useMemo(() => new Date(now.getTime() + offset), [now, offset]);
+            const nowSec = t.getHours() * 3600 + t.getMinutes() * 60 + t.getSeconds();
+
+            /* 有效考程（時間完整且合理），依開始時間排序 */
+            const slots = useMemo(() => schedule
+                .map((r) => ({ ...r, s: toMin(r.start), e: toMin(r.end) }))
+                .filter((r) => r.s != null && r.e != null && r.e > r.s)
+                .sort((a, b) => a.s - b.s), [schedule]);
+
+            const status = useMemo(() => {
+                if (!slots.length) return { mode: 'empty' };
+                for (let i = 0; i < slots.length; i++) {
+                    const it = slots[i], s = it.s * 60, e = it.e * 60;
+                    if (nowSec >= s && nowSec < e) {
+                        const remain = e - nowSec;
+                        const percent = Math.min(100, ((nowSec - s) / (e - s)) * 100);
+                        const tone = remain <= 300 ? 'danger' : percent > 50 ? 'warn' : 'ok';
+                        return { mode: 'live', i, it, remain, percent, tone };
+                    }
+                }
+                const ni = slots.findIndex((it) => it.s * 60 > nowSec);
+                if (ni >= 0) return { mode: 'wait', i: ni, it: slots[ni], until: slots[ni].s * 60 - nowSec, started: ni > 0 };
+                return { mode: 'done' };
+            }, [slots, nowSec]);
+
+            const exp = parseInt(attendance.expected, 10);
+            const act = parseInt(attendance.actual, 10);
+            const missing = Number.isFinite(exp) && Number.isFinite(act) ? Math.max(exp - act, 0) : null;
+
+            const toggleFullscreen = () => {
+                try {
+                    if (document.fullscreenElement) document.exitFullscreen();
+                    else document.documentElement.requestFullscreen();
+                } catch {}
+            };
+
+            /* ----- 主欄位內容 ----- */
+            const heroClass = status.mode === 'live' ? `live tone-${status.tone}` : status.mode === 'wait' ? 'wait' : 'idle';
+            let badge, title, it = status.it;
+            if (status.mode === 'live') badge = <span className="badge live"><span className="dot" />考試中</span>;
+            else if (status.mode === 'wait') badge = <span className="badge wait"><span className="dot" />{status.started ? '下課休息・下一節' : '尚未開考・第一節'}</span>;
+            else badge = <span className="badge idle"><span className="dot" />{status.mode === 'done' ? '已結束' : '未設定'}</span>;
+
+            if (status.mode === 'done') title = '今日考試結束';
+            else if (status.mode === 'empty') title = '尚未設定考程';
+            else title = it.subject || '（未命名科目）';
+
+            const heroSize = `min(26vh, calc(52vw / ${charLen(title) * 1.04}))`;
+            const remainFmt = status.mode === 'live' ? fmtRemain(status.remain) : status.mode === 'wait' ? fmtRemain(status.until) : null;
+
+            const n = slots.length || 1;
+
+            return (
+                <div className="board">
+                    {/* 頂列：提醒 */}
+                    <div className="topbar">
+                        <div className="notice">
+                            <div className="notice-tag">提醒</div>
+                            {editingNotice ? (
+                                <div className="notice-edit">
+                                    <input autoFocus value={notice} onChange={(e) => setNotice(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && setEditingNotice(false)} onBlur={() => setEditingNotice(false)} />
+                                </div>
+                            ) : (
+                                <button className="notice-text" title="點擊編輯" onClick={() => setEditingNotice(true)}>{notice || '（點擊輸入提醒事項）'}</button>
+                            )}
+                        </div>
+                        <button className="tool-btn" title="全螢幕" onClick={toggleFullscreen}>{Icon.expand}</button>
+                        <button className="tool-btn" title="設定考程" onClick={() => setShowSettings(true)}>{Icon.gear}</button>
+                    </div>
+
+                    {/* 主區 */}
+                    <div className="main">
+                        <section className={`card hero ${heroClass}`}>
+                            <div className="hero-top">
+                                <div className="hero-meta">
+                                    {badge}
+                                    {(status.mode === 'live' || status.mode === 'wait') && <span>{periodName(status.i)}</span>}
+                                </div>
+                                {it && it.supervisor && <div className="supervisor">監考老師<b>{it.supervisor}</b></div>}
+                            </div>
+
+                            <div className="hero-subject" style={{ fontSize: heroSize }}>{title}</div>
+
+                            {it && (
+                                <div className="hero-bottom">
+                                    <div>
+                                        <div className="label">考試時間</div>
+                                        <div className="hero-time num">{it.start}<span className="sep">–</span>{it.end}</div>
+                                    </div>
+                                    {remainFmt && (
+                                        <div className="remain">
+                                            <div className="label">{status.mode === 'live' ? '剩餘時間' : '距離開考'}</div>
+                                            <div className="remain-value num">{remainFmt.value}{remainFmt.unit && <span className="remain-unit">{remainFmt.unit}</span>}</div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {status.mode === 'live' && <div className="progress"><i style={{ width: `${status.percent}%` }} /></div>}
+                            {status.mode === 'empty' && <button className="hero-empty-btn" onClick={() => setShowSettings(true)}>開啟設定，輸入考程</button>}
+                        </section>
+
+                        <aside className="side">
+                            <div className="card clock">
+                                <div className="clock-date">{t.getMonth() + 1} 月 {t.getDate()} 日　星期{WEEK[t.getDay()]}</div>
+                                <div className="clock-time num">{pad(t.getHours())}:{pad(t.getMinutes())}<small>{pad(t.getSeconds())}</small></div>
+                                {offset !== 0 && <div className="clock-offset">已校正 {offset > 0 ? '+' : ''}{Math.round(offset / 1000)} 秒</div>}
+                            </div>
+
+                            <div className="card attend">
+                                <div className="attend-grid">
+                                    <div className="stat">
+                                        <label>應到</label>
+                                        <input className="num" type="number" inputMode="numeric" placeholder="0" value={attendance.expected} onChange={(e) => setAttendance({ ...attendance, expected: e.target.value })} />
+                                    </div>
+                                    <div className="stat">
+                                        <label>實到</label>
+                                        <input className="num" type="number" inputMode="numeric" placeholder="0" value={attendance.actual} onChange={(e) => setAttendance({ ...attendance, actual: e.target.value })} />
+                                    </div>
+                                    <div className={`stat ${missing === 0 ? 'full' : missing > 0 ? 'absent' : ''}`}>
+                                        <label>缺考</label>
+                                        <div className="val num">{missing ?? '–'}</div>
+                                    </div>
+                                </div>
+                                <div className="absent-list">
+                                    <label>缺考座號</label>
+                                    <textarea value={attendance.absent} placeholder="例如：5、12、23" onChange={(e) => setAttendance({ ...attendance, absent: e.target.value })} />
+                                </div>
+                            </div>
+                        </aside>
+                    </div>
+
+                    {/* 底部：考程區塊 */}
+                    {slots.length ? (
+                        <div className="schedule" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
+                            {slots.map((r, i) => {
+                                const done = nowSec >= r.e * 60;
+                                const live = status.mode === 'live' && status.i === i;
+                                const next = status.mode === 'wait' && status.i === i;
+                                const cls = live ? 'live' : next ? 'next' : done ? 'done' : '';
+                                const chip = live ? '進行中' : next ? '下一節' : done ? '已結束' : '待考';
+                                const size = `min(6vh, calc((92vw / ${n} - 3vw) / ${charLen(r.subject) * 1.03}))`;
+                                return (
+                                    <div className={`slot ${cls}`} key={i}>
+                                        <div className="slot-head"><span>{periodName(i)}</span><span className="chip">{chip}</span></div>
+                                        <div className="slot-subject" style={{ fontSize: size }}>{r.subject || '—'}</div>
+                                        <div className="slot-time num">{r.start}<span className="sep">–</span>{r.end}</div>
+                                        {live && <div className="slot-fill" style={{ width: `${status.percent}%` }} />}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="schedule-empty">尚無考程，請點右上角齒輪設定</div>
+                    )}
+
+                    {showSettings && (
+                        <Settings
+                            schedule={schedule} setSchedule={setSchedule}
+                            offset={offset} setOffset={setOffset}
+                            notice={notice} setNotice={setNotice}
+                            onClose={() => setShowSettings(false)}
+                        />
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
 </html>
